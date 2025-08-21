@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Go Game — Sleek Canvas</title>
+<style>
+  :root{
+    --board-bg: #d7b67a;
+    --board-lines: #684e2d;
+    --stone-black: #111;
+    --stone-white: #f3f3f3;
+    --accent: #0ea5e9;
+    --accent-2: #22c55e;
+    --text: #1a1a1a;
+    --panel: #ffffffcc;
+    --shadow: rgba(0,0,0,.25);
+    --territory-black: rgba(32, 180, 255, .22);
+    --territory-white: rgba(255, 255, 255, .22);
+  }
+  .dark{
+    --board-bg: radial-gradient(120% 120% at 20% 20%, #0b1020, #05060a 55%);
+    --board-lines: #4b5563;
+    --stone-black: #0f172a;
+    --stone-white: #e5e7eb;
+    --accent: #8b5cf6;
+    --accent-2: #22d3ee;
+    --text: #e5e7eb;
+    --panel: #0b1020d9;
+    --shadow: rgba(0,0,0,.55);
+    --territory-black: rgba(139, 92, 246, .22);
+    --territory-white: rgba(34, 211, 238, .18);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body{
+    margin:0;
+    font: 15px/1.4 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+    color: var(--text);
+    background: #0c0c0c;
+    display:grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  header, footer{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  header .left, header .right, footer { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  h1{
+    font-size:20px; margin:0; letter-spacing:.3px; font-weight:700;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text; background-clip:text; color: transparent;
+  }
+
+  .board-wrap{
+    position:relative;
+    max-width: min(92vh, 100%);
+    margin: 0 auto;
+    aspect-ratio: 1 / 1;
+    border-radius: 18px;
+    box-shadow: 0 20px 40px var(--shadow), inset 0 1px 0 rgba(255,255,255,.12);
+    overflow:hidden;
+    background: var(--board-bg);
+  }
+  canvas#board{
+    width:100%; height:100%;
+    display:block;
+  }
+  .overlay{
+    position:absolute; inset:0; pointer-events:none;
+  }
+  .panel{
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: 0 10px 30px var(--shadow);
+    border-radius: 12px;
+    padding: 10px 12px;
+  }
+  .controls{
+    position: absolute; left: 10px; top: 10px; display:flex; gap:8px; flex-wrap:wrap;
+  }
+  .legend{
+    position: absolute; right: 10px; top: 10px; display:flex; gap:12px; align-items:center;
+  }
+  .legend .pill{
+    display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; border:1px solid rgba(0,0,0,.08);
+    background: rgba(255,255,255,.6);
+  }
+  .dark .legend .pill{ background: rgba(15,23,42,.6); border-color:#1f2937; }
+  .pill .dot{
+    width:14px; height:14px; border-radius:50%; box-shadow: 0 2px 6px var(--shadow) inset, 0 1px 0 rgba(255,255,255,.2);
+  }
+  .dot.black{ background: var(--stone-black); }
+  .dot.white{ background: var(--stone-white); border:1px solid rgba(0,0,0,.15); }
+  .pill small{ opacity:.85; }
+
+  button, select{
+    appearance:none; border:1px solid rgba(0,0,0,.08); border-radius:10px; padding:8px 10px;
+    background: #fff; color:#111; font-weight:600; cursor:pointer;
+    transition: transform .06s ease, box-shadow .2s ease;
+    box-shadow: 0 6px 14px var(--shadow);
+  }
+  .dark button, .dark select{ background:#0f172a; color:#e5e7eb; border-color:#1f2937; }
+  button:hover, select:hover{ transform: translateY(-1px); }
+  button:active{ transform: translateY(0); }
+  select { padding-right: 32px; }
+
+  .right button{
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .badge{
+    font-size:12px; padding:2px 8px; border-radius:8px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); color:white; font-weight:700;
+    box-shadow: 0 6px 14px var(--shadow);
+  }
+  .readout{
+    position:absolute; left:10px; bottom:10px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+  }
+  .readout .panel{ display:flex; gap:16px; align-items:center; }
+  .cap{
+    display:flex; align-items:center; gap:6px;
+  }
+  .cap .dot{ width:16px; height:16px; }
+  .hint{
+    font-size:12px; opacity:.8;
+  }
+  .territory-key{
+    display:flex; gap:10px; align-items:center; font-size:12px; opacity:.9;
+  }
+  .swatch{ width:14px; height:14px; border-radius:3px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+
+  footer{ justify-content:center; opacity:.85; }
+  footer a{ color: var(--accent-2); text-decoration:none; border-bottom:1px dotted currentColor; }
+</style>
+</head>
+<body class="">
+  <header>
+    <div class="left">
+      <h1>Go — Smooth Canvas Edition</h1>
+      <span class="badge" id="turnBadge">Black to move</span>
+    </div>
+    <div class="right">
+      <select id="sizeSelect" title="Board size">
+        <option value="9">9×9</option>
+        <option value="13" selected>13×13</option>
+        <option value="19">19×19</option>
+      </select>
+      <button id="newBtn" title="Start a fresh game">New Game</button>
+      <button id="undoBtn" title="Undo last move (Z)">Undo</button>
+      <button id="passBtn" title="Pass (P)">Pass</button>
+      <button id="themeBtn" title="Toggle theme (T)">Toggle Theme</button>
+    </div>
+  </header>
+
+  <div class="board-wrap" id="wrap">
+    <canvas id="board"></canvas>
+    <div class="overlay">
+      <div class="controls panel">
+        <span class="hint">Hover/tap to preview · Click to place</span>
+      </div>
+      <div class="legend">
+        <div class="pill"><span class="dot black"></span><small>Black</small></div>
+        <div class="pill"><span class="dot white"></span><small>White</small></div>
+      </div>
+      <div class="readout">
+        <div class="panel">
+          <div class="cap"><span class="dot black"></span><span id="blackCaps">0</span> captures</div>
+          <div class="cap"><span class="dot white"></span><span id="whiteCaps">0</span> captures</div>
+          <div class="territory-key" id="terrKey" style="display:none;">
+            <div class="swatch" style="background:var(--territory-black)"></div> Black territory
+            <div class="swatch" style="background:var(--territory-white)"></div> White territory
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div>Controls: <b>Z</b> Undo · <b>P</b> Pass · <b>T</b> Theme · <b>1/2/3</b> Board size</div>
+  </footer>
+
+<script>
+(() => {
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+
+  // UI elements
+  const sizeSelect = document.getElementById('sizeSelect');
+  const newBtn = document.getElementById('newBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const passBtn = document.getElementById('passBtn');
+  const themeBtn = document.getElementById('themeBtn');
+  const turnBadge = document.getElementById('turnBadge');
+  const blackCapsEl = document.getElementById('blackCaps');
+  const whiteCapsEl = document.getElementById('whiteCaps');
+  const terrKey = document.getElementById('terrKey');
+  const body = document.body;
+
+  // Game state
+  let N = parseInt(sizeSelect.value, 10);
+  let grid = makeGrid(N);
+  let turn = 1; // 1 = black, 2 = white
+  let lastHover = null;
+  let history = []; // stack of {grid, turn, caps, ko}
+  let caps = {1:0, 2:0};
+  let ko = null; // {x,y} forbidden point due to ko
+  let passCount = 0;
+  let showTerritory = false;
+
+  function makeGrid(n){ return Array.from({length:n}, ()=>Array(n).fill(0)); }
+  function cloneGrid(g){ return g.map(row => row.slice()); }
+
+  // Resize canvas to device pixels
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  // Helpers
+  function inBounds(x,y){ return x>=0 && y>=0 && x<N && y<N; }
+  function neighbors(x,y){
+    return [[x+1,y],[x-1,y],[x,y+1],[x,y-1]].filter(([i,j])=>inBounds(i,j));
+  }
+  function groupAt(x,y){
+    const color = grid[y][x];
+    if(!color) return {stones:[], liberties:new Set(), color:0};
+    const seen = new Set();
+    const q = [[x,y]];
+    const stones = [];
+    const libs = new Set();
+    while(q.length){
+      const [cx,cy] = q.pop();
+      const key = cx+','+cy;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      stones.push([cx,cy]);
+      for(const [nx,ny] of neighbors(cx,cy)){
+        const v = grid[ny][nx];
+        if(v === 0){ libs.add(nx+','+ny); }
+        else if(v === color){ q.push([nx,ny]); }
+      }
+    }
+    return {stones, liberties:libs, color};
+  }
+  function findCapturedByMove(x,y,color){
+    // after tentatively placing (x,y,color), return opponent groups with 0 libs
+    const opp = color===1?2:1;
+    const dead = [];
+    for(const [nx,ny] of neighbors(x,y)){
+      if(grid[ny][nx] !== opp) continue;
+      const g = groupAt(nx,ny);
+      // subtract the newly placed liberty if it exists
+      g.liberties.delete(x+','+y);
+      if(g.liberties.size === 0) dead.push(g);
+    }
+    return dead;
+  }
+  function isSuicide(x,y,color,deadGroups){
+    // If any opponent groups die, not suicide.
+    if(deadGroups.length) return false;
+    // Otherwise, check the placed stone's group liberties
+    grid[y][x] = color;
+    const g = groupAt(x,y);
+    grid[y][x] = 0; // revert
+    // Its liberties include the placed intersection; simulate neighbors’ occupation:
+    return g.liberties.size === 0;
+  }
+  function sameBoard(a,b){
+    for(let j=0;j<N;j++){
+      for(let i=0;i<N;i++){
+        if(a[j][i] !== b[j][i]) return false;
+      }
+    }
+    return true;
+  }
+
+  // Move application
+  function play(x,y){
+    if(!inBounds(x,y)) return;
+    if(grid[y][x] !== 0) return;
+    if(ko && ko.x===x && ko.y===y) return;
+
+    const color = turn;
+    const opp = color===1?2:1;
+
+    const deadGroups = findCapturedByMove(x,y,color);
+    if(isSuicide(x,y,color,deadGroups)) return;
+
+    // Save history (for undo)
+    history.push({
+      grid: cloneGrid(grid),
+      turn, caps: {...caps}, ko: ko? {...ko}: null, passCount, showTerritory
+    });
+
+    // Place stone
+    grid[y][x] = color;
+
+    // Remove captured stones
+    let capturedCount = 0;
+    for(const g of deadGroups){
+      for(const [sx,sy] of g.stones){
+        grid[sy][sx] = 0;
+        capturedCount++;
+      }
+    }
+    caps[color] += capturedCount;
+
+    // Ko rule (simple): if exactly one stone captured and our group is single,
+    // forbid immediate recapture at that point
+    ko = null;
+    if(capturedCount === 1){
+      const ourGroup = groupAt(x,y);
+      if(ourGroup.stones.length === 1){
+        // find where the stone was captured (neighbor with 0)
+        for(const [nx,ny] of neighbors(x,y)){
+          if(grid[ny][nx] === 0){
+            // This is a heuristic; proper positional superko is more complex.
+            ko = {x:nx,y:ny};
+          }
+        }
+      }
+    }
+
+    passCount = 0; // reset on normal move
+    showTerritory = false;
+    swapTurn();
+    draw();
+  }
+
+  function pass(){
+    history.push({
+      grid: cloneGrid(grid),
+      turn, caps: {...caps}, ko: ko? {...ko}: null, passCount, showTerritory
+    });
+    passCount++;
+    if(passCount >= 2){
+      // Trigger territory estimation view
+      showTerritory = true;
+    }
+    swapTurn();
+    draw();
+  }
+
+  function undo(){
+    const prev = history.pop();
+    if(!prev) return;
+    grid = prev.grid;
+    turn = prev.turn;
+    caps = prev.caps;
+    ko = prev.ko;
+    passCount = prev.passCount;
+    showTerritory = prev.showTerritory;
+    draw();
+  }
+
+  function swapTurn(){
+    turn = (turn===1)?2:1;
+    turnBadge.textContent = (turn===1) ? 'Black to move' : 'White to move';
+  }
+
+  // Territory estimation (area-like): flood-fill empty regions; if a region touches only one color, it belongs to that color
+  function estimateTerritory(){
+    const seen = new Set();
+    let terr = {1:new Set(), 2:new Set()};
+    for(let y=0;y<N;y++){
+      for(let x=0;x<N;x++){
+        if(grid[y][x] !== 0) continue;
+        const key = x+','+y;
+        if(seen.has(key)) continue;
+
+        // BFS region
+        const q = [[x,y]];
+        const region = [];
+        const borders = new Set();
+        seen.add(key);
+        while(q.length){
+          const [cx,cy] = q.pop();
+          region.push([cx,cy]);
+          for(const [nx,ny] of neighbors(cx,cy)){
+            const v = grid[ny][nx];
+            if(v===0){
+              const k = nx+','+ny;
+              if(!seen.has(k)){ seen.add(k); q.push([nx,ny]); }
+            }else{
+              borders.add(v);
+            }
+          }
+        }
+
+        if(borders.size === 1){
+          const color = borders.has(1) ? 1 : 2;
+          for(const [rx,ry] of region){
+            terr[color].add(rx+','+ry);
+          }
+        }
+      }
+    }
+    // Scores: stones on board + estimated territory
+    let stones = {1:0,2:0};
+    for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+      if(grid[y][x]===1) stones[1]++;
+      else if(grid[y][x]===2) stones[2]++;
+    }
+    const score = {
+      1: stones[1] + terr[1].size,
+      2: stones[2] + terr[2].size
+    };
+    return {terr, score};
+  }
+
+  // Drawing
+  function draw(){
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    ctx.clearRect(0,0,w,h);
+
+    terrKey.style.display = showTerritory ? '' : 'none';
+
+    const pad = Math.min(w,h)*0.06;
+    const left = pad, top = pad;
+    const right = w - pad, bottom = h - pad;
+
+    const cell = (Math.min(right-left, bottom-top)) / (N-1);
+    const rStone = cell*0.48;
+    const hoverR = rStone * 0.9;
+
+    // Board surface (wood sheen for light theme)
+    if(!body.classList.contains('dark')){
+      // subtle wood noise overlay
+      const grd = ctx.createLinearGradient(0, top-20, 0, bottom+20);
+      grd.addColorStop(0, 'rgba(255,255,255,.25)');
+      grd.addColorStop(0.5, 'rgba(255,255,255,0)');
+      grd.addColorStop(1, 'rgba(0,0,0,.06)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0,0,w,h);
+    }
+
+    // Grid lines
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--board-lines').trim();
+    ctx.lineWidth = Math.max(1.2, cell*0.05);
+    ctx.lineCap = 'round';
+    for(let i=0;i<N;i++){
+      const y = top + i*cell;
+      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+      const x = left + i*cell;
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+    }
+
+    // Star points (hoshi)
+    const star = (n) => {
+      if(n===9) return [2,4,6];
+      if(n===13) return [3,6,9];
+      if(n===19) return [3,9,15];
+      return [];
+    };
+    const stars = star(N);
+    ctx.fillStyle = ctx.strokeStyle;
+    for(const i of stars){
+      for(const j of stars){
+        const x = left + (i-1)*cell;
+        const y = top + (j-1)*cell;
+        ctx.beginPath();
+        ctx.arc(x,y,Math.max(2, cell*0.08), 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // Territory overlay (if showing)
+    let territory = null;
+    if(showTerritory){
+      const est = estimateTerritory();
+      territory = est.terr;
+      // faint overlay
+      ctx.save();
+      for(const color of [1,2]){
+        ctx.fillStyle = (color===1)
+          ? getComputedStyle(document.documentElement).getPropertyValue('--territory-black').trim()
+          : getComputedStyle(document.documentElement).getPropertyValue('--territory-white').trim();
+        for(const key of territory[color]){
+          const [sx,sy] = key.split(',').map(Number);
+          const px = left + sx*cell;
+          const py = top + sy*cell;
+          ctx.beginPath();
+          ctx.rect(px - cell/2, py - cell/2, cell, cell);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+
+      // Score readout in badge
+      const s = est.score;
+      const diff = s[1] - s[2];
+      const lead = diff===0 ? 'Even' : (diff>0 ? `Black +${diff}` : `White +${-diff}`);
+      turnBadge.textContent = `Est. score — ${lead}`;
+    }else{
+      turnBadge.textContent = (turn===1) ? 'Black to move' : 'White to move';
+    }
+
+    // Stones
+    for(let y=0;y<N;y++){
+      for(let x=0;x<N;x++){
+        const v = grid[y][x];
+        if(!v) continue;
+        const px = left + x*cell;
+        const py = top + y*cell;
+        drawStone(px,py,rStone,v);
+      }
+    }
+
+    // Hover preview (only if legal)
+    if(lastHover){
+      const {x,y} = lastHover;
+      if(inBounds(x,y) && grid[y][x]===0){
+        if(!(ko && ko.x===x && ko.y===y)){
+          const dead = findCapturedByMove(x,y,turn);
+          if(!isSuicide(x,y,turn,dead)){
+            const px = left + x*cell;
+            const py = top + y*cell;
+            drawStone(px,py,hoverR,turn, true);
+          }
+        }
+      }
+    }
+
+    // Update capture UI
+    blackCapsEl.textContent = caps[1];
+    whiteCapsEl.textContent = caps[2];
+  }
+
+  function drawStone(x,y,r,color,ghost=false){
+    // soft drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.35)';
+    ctx.shadowBlur = ghost ? 6 : 12;
+    ctx.shadowOffsetY = ghost ? 1 : 2;
+
+    // body
+    const grad = ctx.createRadialGradient(x - r*0.35, y - r*0.35, r*0.15, x, y, r);
+    if(color===1){
+      grad.addColorStop(0, '#444');
+      grad.addColorStop(0.6, '#141414');
+      grad.addColorStop(1, '#000');
+    }else{
+      grad.addColorStop(0, '#fff');
+      grad.addColorStop(0.6, '#f0f0f0');
+      grad.addColorStop(1, '#d9d9d9');
+    }
+    ctx.fillStyle = grad;
+    ctx.globalAlpha = ghost ? 0.55 : 1.0;
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fill();
+
+    // rim gleam
+    ctx.globalAlpha = ghost ? 0.25 : 0.5;
+    ctx.lineWidth = Math.max(1, r*0.06);
+    ctx.strokeStyle = color===1 ? 'rgba(255,255,255,.13)' : 'rgba(0,0,0,.18)';
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // Picking helpers
+  function posToCell(px,py){
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    const pad = Math.min(w,h)*0.06;
+    const left = pad, top = pad;
+    const right = w - pad, bottom = h - pad;
+    const cell = (Math.min(right-left, bottom-top)) / (N-1);
+    const x = Math.round((px - rect.left - left) / cell);
+    const y = Math.round((py - rect.top  - top ) / cell);
+    return {x,y};
+  }
+
+  // Events
+  canvas.addEventListener('mousemove', (e)=>{
+    lastHover = posToCell(e.clientX, e.clientY);
+    draw();
+  });
+  canvas.addEventListener('mouseleave', ()=>{
+    lastHover = null; draw();
+  });
+  canvas.addEventListener('click', (e)=>{
+    const {x,y} = posToCell(e.clientX, e.clientY);
+    play(x,y);
+  });
+
+  // Touch support
+  let touchHoverTimer = null;
+  canvas.addEventListener('touchstart', (e)=>{
+    const t = e.touches[0];
+    lastHover = posToCell(t.clientX, t.clientY);
+    draw();
+    // if user holds, cancel hover (like “lift finger to cancel”)
+    touchHoverTimer = setTimeout(()=>{ lastHover=null; draw(); }, 1200);
+  }, {passive:true});
+  canvas.addEventListener('touchmove', (e)=>{
+    const t = e.touches[0];
+    lastHover = posToCell(t.clientX, t.clientY);
+    draw();
+  }, {passive:true});
+  canvas.addEventListener('touchend', (e)=>{
+    clearTimeout(touchHoverTimer);
+    if(lastHover){
+      play(lastHover.x,lastHover.y);
+      lastHover=null; draw();
+    }
+  });
+
+  // Controls
+  newBtn.addEventListener('click', ()=>{
+    grid = makeGrid(N); turn=1; history=[]; caps={1:0,2:0}; ko=null; passCount=0; showTerritory=false; draw();
+  });
+  undoBtn.addEventListener('click', ()=> undo());
+  passBtn.addEventListener('click', ()=> pass());
+  sizeSelect.addEventListener('change', ()=>{
+    N = parseInt(sizeSelect.value,10);
+    grid = makeGrid(N); turn=1; history=[]; caps={1:0,2:0}; ko=null; passCount=0; showTerritory=false; draw();
+  });
+  themeBtn.addEventListener('click', ()=>{
+    body.classList.toggle('dark'); draw();
+  });
+
+  window.addEventListener('keydown', (e)=>{
+    if(e.key==='z' || e.key==='Z') undo();
+    if(e.key==='p' || e.key==='P') pass();
+    if(e.key==='t' || e.key==='T') { body.classList.toggle('dark'); draw(); }
+    if(e.key==='1'){ sizeSelect.value='9'; sizeSelect.dispatchEvent(new Event('change')); }
+    if(e.key==='2'){ sizeSelect.value='13'; sizeSelect.dispatchEvent(new Event('change')); }
+    if(e.key==='3'){ sizeSelect.value='19'; sizeSelect.dispatchEvent(new Event('change')); }
+  });
+
+  // Kickoff
+  resize();
+  // start in dark on OLED-ish backgrounds for ✨ vibes
+  body.classList.add('dark'); draw();
+
+})();
+</script>
+</body>
+</html>
