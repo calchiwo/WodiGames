@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chess — Pure HTML/CSS/JS</title>
+<style>
+  :root {
+    --light:#f0d9b5;
+    --dark:#b58863;
+    --highlight:#f6f669;
+    --lastmove:#a3d3ff;
+    --check:#ff6b6b;
+    --panel:#0f172a;
+    --ink:#0b1020;
+    --muted:#6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+    background: #0b1020; color: #e5e7eb;
+    display: grid; place-items: start center;
+  }
+  .app {
+    display: grid;
+    grid-template-columns: min(88vw, 560px) min(88vw, 360px);
+    gap: 24px; width: min(92vw, 960px);
+  }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+  }
+  .board {
+    aspect-ratio: 1;
+    border-radius: 12px; overflow: clip;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.06);
+    position: relative;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    width: 100%; height: 100%;
+  }
+  .sq {
+    position: relative; display: grid; place-items: center; font-size: clamp(20px, 7vw, 52px);
+    line-height: 1; cursor: pointer;
+  }
+  .sq.light { background: var(--light); color:#111; }
+  .sq.dark  { background: var(--dark); color:#fff; }
+  .sq.highlight::after {
+    content:""; position:absolute; inset:0;
+    background: radial-gradient(circle at center, rgba(246,246,105,.7) 0 24%, transparent 26%);
+  }
+  .sq.target::after {
+    content:""; position:absolute; inset:0;
+    background: radial-gradient(circle at center, rgba(163,211,255,.9) 0 26%, transparent 28%);
+    mix-blend-mode: multiply;
+  }
+  .sq.lastmove { outline: 4px solid var(--lastmove); outline-offset: -4px; }
+  .sq.check { outline: 6px solid var(--check); outline-offset: -6px; }
+  .coords {
+    position: absolute; inset: 0; pointer-events: none; font-size: 11px; font-weight: 600;
+    color: #000a;
+  }
+  .coords .a, .coords .1 {
+    position: absolute; padding: 6px;
+  }
+  .coords .a { bottom: 0; left: 0; }
+  .coords .1 { top: 0; right: 0; }
+  .panel {
+    background: var(--panel); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px; padding: 16px; display: grid; gap: 12px; align-content: start;
+  }
+  .panel h2 { margin: 0; font-size: 18px; letter-spacing:.2px; }
+  .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, select, input[type="text"] {
+    background: #111827; color:#e5e7eb; border:1px solid rgba(255,255,255,.12);
+    border-radius: 10px; padding: 10px 12px; font: inherit; cursor: pointer;
+  }
+  button:hover { background:#0b1227; }
+  button.primary { background:#2563eb; border-color:#1d4ed8; }
+  button.primary:hover { background:#1d4ed8; }
+  .status { padding: 10px 12px; background:#0b1227; border:1px solid rgba(255,255,255,.08); border-radius: 10px; }
+  .moves {
+    max-height: 280px; overflow:auto; background:#0b1227;
+    border:1px solid rgba(255,255,255,.08); border-radius:10px; padding: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .moves ol { margin: 0; padding-left: 20px; }
+  .footnote { color: var(--muted); font-size: 12px; }
+  .promo {
+    position: absolute; inset: 0; background: rgba(0,0,0,.6); display:none; align-items:center; justify-content:center;
+  }
+  .promo-inner {
+    background: #111827; border:1px solid rgba(255,255,255,.2); border-radius:12px; padding:16px;
+    display:grid; gap:8px; min-width: 260px;
+  }
+  .promo-grid { display:grid; grid-template-columns: repeat(4,1fr); gap:8px; }
+  .promo button { font-size: 18px; padding: 12px 0; }
+  .toprow { display:flex; gap:8px; align-items:center; justify-content: space-between; }
+  .spacer { flex:1; }
+  .fenrow { display:flex; gap:8px; }
+  .fenrow input { flex:1; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="board" id="board" aria-label="Chess board">
+      <div class="grid" id="grid" role="grid" aria-label="8 by 8 chessboard"></div>
+      <div class="coords"><span class="a">a1</span><span class="1">h8</span></div>
+      <div class="promo" id="promo">
+        <div class="promo-inner">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <strong>Promote pawn to:</strong>
+            <button id="cancelPromo" title="Cancel">✕</button>
+          </div>
+          <div class="promo-grid">
+            <button data-piece="q">♛</button>
+            <button data-piece="r">♜</button>
+            <button data-piece="b">♝</button>
+            <button data-piece="n">♞</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="toprow">
+        <h2>Chess</h2>
+        <div class="spacer"></div>
+        <button id="new" class="primary">New Game</button>
+        <button id="flip">Flip</button>
+      </div>
+
+      <div class="status" id="status">White to move.</div>
+
+      <div class="btnrow">
+        <button id="undo">Undo</button>
+        <button id="redo">Redo</button>
+        <button id="random">Computer (random)</button>
+      </div>
+
+      <div class="fenrow">
+        <input id="fen" type="text" placeholder="FEN" />
+        <button id="loadFen">Load</button>
+        <button id="copyFen">Copy</button>
+      </div>
+
+      <div class="moves" id="moves" aria-live="polite">
+        <ol id="movelist"></ol>
+      </div>
+
+      <div class="footnote">
+        Click a piece to see legal moves, then click a target square. Supports castling, en passant, promotion, undo/redo, FEN.
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // --- Utilities ---
+  const FILES = ['a','b','c','d','e','f','g','h'];
+  const toIdx = (sq) => {
+    const f = FILES.indexOf(sq[0]);
+    const r = Number(sq[1]) - 1;
+    return r*8 + f;
+  };
+  const idxToSq = (i) => FILES[i%8] + (Math.floor(i/8)+1);
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const pieceChar = {
+    'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔',
+    'p':'♟︎','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'
+  };
+  const isUpper = c => c === c.toUpperCase();
+
+  // --- Position state ---
+  function startPosition() {
+    return parseFEN("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  }
+
+  function parseFEN(fen) {
+    const [boardPart, turn, castling, ep, hm, fm] = fen.trim().split(/\s+/);
+    const rows = boardPart.split('/');
+    const board = new Array(64).fill('.');
+    for (let r = 0; r < 8; r++) {
+      let file = 0;
+      for (const ch of rows[7 - r]) {
+        if (/\d/.test(ch)) file += Number(ch);
+        else board[r*8 + file++] = ch;
+      }
+    }
+    return {
+      board, turn: turn || 'w',
+      castling: castling === '-' ? '' : castling,
+      ep: ep && ep !== '-' ? ep : null,
+      halfmove: Number(hm||0), fullmove: Number(fm||1),
+      history: [], future: []
+    };
+  }
+
+  function toFEN(pos) {
+    let rows = [];
+    for (let r = 7; r >= 0; r--) {
+      let s='', empty=0;
+      for (let f=0; f<8; f++) {
+        const p = pos.board[r*8+f];
+        if (p === '.') empty++;
+        else { if (empty){ s+=empty; empty=0; } s += p; }
+      }
+      if (empty) s+=empty;
+      rows.push(s);
+    }
+    return [
+      rows.join('/'),
+      pos.turn,
+      pos.castling || '-',
+      pos.ep || '-',
+      pos.halfmove|0,
+      pos.fullmove|0
+    ].join(' ');
+  }
+
+  // --- Move generation (pseudo-legal then filter) ---
+  const DIRS = {
+    N: [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]],
+    B: [[1,1],[1,-1],[-1,1],[-1,-1]],
+    R: [[1,0],[-1,0],[0,1],[0,-1]],
+    Q: [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]]
+  };
+
+  function onBoard(f,r){ return f>=0 && f<8 && r>=0 && r<8; }
+
+  function genPseudoMoves(pos) {
+    const moves = [];
+    const us = pos.turn;
+    const them = us === 'w' ? 'b' : 'w';
+    const pawnDir = us === 'w' ? 1 : -1;
+    const startRank = us === 'w' ? 1 : 6; // 2nd or 7th rank (0-indexed)
+    for (let i=0;i<64;i++) {
+      const p = pos.board[i];
+      if (p === '.' || (us === 'w' ? !isUpper(p) : isUpper(p))) continue;
+      const f = i%8, r = Math.floor(i/8);
+      const add = (to, flags={}) => moves.push({from:i,to,flags, piece:p});
+      const tgt = (f2,r2)=> pos.board[r2*8+f2];
+      switch (p.toLowerCase()) {
+        case 'p': {
+          const r1 = r + pawnDir, i1 = r1*8+f;
+          if (onBoard(f,r1) && pos.board[i1]==='.') {
+            // promotions?
+            const endRank = us==='w'?7:0;
+            if (r1===endRank) {
+              for (const promo of ['q','r','b','n']) add(i1,{promo});
+            } else add(i1,{});
+            // double push
+            if (r===startRank) {
+              const r2 = r + 2*pawnDir, i2 = r2*8+f;
+              if (pos.board[i2]==='.') add(i2,{double:true});
+            }
+          }
+          // captures
+          for (const df of [-1,1]) {
+            const f2 = f+df, r2 = r+pawnDir;
+            if (!onBoard(f2,r2)) continue;
+            const i2 = r2*8+f2;
+            const q = pos.board[i2];
+            if (q!=='.' && (us==='w'? !isUpper(q): isUpper(q))) {
+              const endRank = us==='w'?7:0;
+              if (r2===endRank) {
+                for (const promo of ['q','r','b','n']) add(i2,{capture:true,promo});
+              } else add(i2,{capture:true});
+            }
+          }
+          // en passant
+          if (pos.ep) {
+            const epIdx = toIdx(pos.ep);
+            if (Math.abs((epIdx%8) - f) === 1 && Math.floor(epIdx/8) === r + pawnDir) {
+              add(epIdx,{ep:true});
+            }
+          }
+          break;
+        }
+        case 'n': {
+          for (const [df,dr] of DIRS.N) {
+            const f2=f+df, r2=r+dr;
+            if (!onBoard(f2,r2)) continue;
+            const i2=r2*8+f2, q=pos.board[i2];
+            if (q==='.' || (us==='w'? !isUpper(q): isUpper(q))) add(i2,{capture:q!=='.'});
+          }
+          break;
+        }
+        case 'b': case 'r': case 'q': {
+          const rays = p.toLowerCase()==='b'?DIRS.B : p.toLowerCase()==='r'?DIRS.R : DIRS.Q;
+          for (const [df,dr] of rays) {
+            let f2=f+df, r2=r+dr;
+            while (onBoard(f2,r2)) {
+              const i2=r2*8+f2, q=pos.board[i2];
+              if (q==='.') { add(i2,{}); }
+              else {
+                if (us==='w'? !isUpper(q): isUpper(q)) add(i2,{capture:true});
+                break;
+              }
+              f2+=df; r2+=dr;
+            }
+          }
+          break;
+        }
+        case 'k': {
+          for (const [df,dr] of DIRS.Q) {
+            const f2=f+df, r2=r+dr;
+            if (!onBoard(f2,r2)) continue;
+            const i2=r2*8+f2, q=pos.board[i2];
+            if (q==='.' || (us==='w'? !isUpper(q): isUpper(q))) add(i2,{capture:q!=='.'});
+          }
+          // castling
+          if ((us==='w' && r===0 && f===4) || (us==='b' && r===7 && f===4)) {
+            const rights = pos.castling||'';
+            const K = us==='w'?'K':'k', Q = us==='w'?'Q':'q';
+            const backRank = us==='w'?0:7;
+            const enemy = them;
+            const empty = (c)=> pos.board[backRank*8 + c]==='.';
+            const attacked = (sqIdx)=> squareAttacked(pos, sqIdx, enemy);
+            // King-side
+            if (rights.includes(K) && empty(5) && empty(6) &&
+                !attacked(r*8+4) && !attacked(r*8+5) && !attacked(r*8+6)) {
+              add(backRank*8+6,{castle:'K'});
+            }
+            // Queen-side
+            if (rights.includes(Q) && empty(3) && empty(2) && empty(1) &&
+                !attacked(r*8+4) && !attacked(r*8+3) && !attacked(r*8+2)) {
+              add(backRank*8+2,{castle:'Q'});
+            }
+          }
+          break;
+        }
+      }
+    }
+    return moves;
+  }
+
+  function findKing(pos, color) {
+    const target = color==='w' ? 'K' : 'k';
+    return pos.board.findIndex(c => c===target);
+  }
+
+  function squareAttacked(pos, sqIdx, byColor) {
+    // Generate all pseudo moves for 'byColor' and see if any land on sqIdx
+    const tmp = clone(pos);
+    tmp.turn = byColor;
+    const moves = genPseudoMoves(tmp);
+    return moves.some(m => m.to === sqIdx);
+  }
+
+  function makeMove(pos, move) {
+    const np = clone(pos);
+    const us = pos.turn;
+    const them = us==='w'?'b':'w';
+    const b = np.board;
+    const from = move.from, to = move.to;
+    const piece = b[from];
+    const captured = b[to] !== '.' ? b[to] : null;
+    let epCapture = null;
+
+    // Halfmove clock
+    np.halfmove = (piece.toLowerCase()==='p' || captured) ? 0 : (np.halfmove + 1);
+
+    // Move piece
+    b[to] = piece;
+    b[from] = '.';
+
+    // En passant capture removes the pawn behind
+    if (move.flags && move.flags.ep) {
+      const dir = us==='w' ? -1 : 1;
+      const capIdx = to + dir*8;
+      epCapture = b[capIdx];
+      b[capIdx] = '.';
+    }
+
+    // Promotion
+    if (move.flags && move.flags.promo) {
+      b[to] = (us==='w' ? move.flags.promo.toUpperCase() : move.flags.promo).toLowerCase() === move.flags.promo
+        ? (us==='w'? move.flags.promo.toUpperCase() : move.flags.promo)
+        : (us==='w'? move.flags.promo.toUpperCase() : move.flags.promo);
+      b[to] = us==='w' ? move.flags.promo.toUpperCase() : move.flags.promo;
+    }
+
+    // Castling: move rook
+    if (move.flags && move.flags.castle) {
+      const r = us==='w'?0:7;
+      if (move.flags.castle==='K') {
+        // rook from h to f
+        b[r*8+5] = b[r*8+7]; b[r*8+7]='.';
+      } else {
+        // rook from a to d
+        b[r*8+3] = b[r*8+0]; b[r*8+0]='.';
+      }
+    }
+
+    // Update castling rights
+    const lose = (c)=> np.castling = (np.castling||'').replace(c,'');
+    // If king moves, lose both
+    if (piece === 'K') { lose('K'); lose('Q'); }
+    if (piece === 'k') { lose('k'); lose('q'); }
+    // If rook moves or is captured, lose its side
+    const fromFile = from%8, toFile = to%8, fromRank = Math.floor(from/8), toRank = Math.floor(to/8);
+    if (from === 0) lose('Q');
+    if (from === 7) lose('K');
+    if (from === 56) lose('q');
+    if (from === 63) lose('k');
+    if (to === 0) lose('Q');
+    if (to === 7) lose('K');
+    if (to === 56) lose('q');
+    if (to === 63) lose('k');
+
+    // Set en passant square
+    if (move.flags && move.flags.double) {
+      const dir = us==='w' ? 1 : -1;
+      np.ep = idxToSq(from + dir*8);
+    } else {
+      np.ep = null;
+    }
+
+    // Fullmove number
+    if (us==='b') np.fullmove += 1;
+
+    // Switch turn
+    np.turn = them;
+
+    // Save history entry
+    np.history = np.history || [];
+    const uci = idxToSq(from) + idxToSq(to) + (move.flags && move.flags.promo ? (move.flags.promo) : '');
+    np.history.push({
+      uci,
+      move,
+      fenBefore: toFEN(pos),
+      capture: captured || epCapture || null
+    });
+    // Clear redo stack
+    np.future = [];
+    return np;
+  }
+
+  function legalMoves(pos) {
+    const pseudo = genPseudoMoves(pos);
+    const me = pos.turn;
+    const res = [];
+    for (const m of pseudo) {
+      const after = makeMove(pos, m);
+      const ksq = findKing(after, me);
+      if (!squareAttacked(after, ksq, after.turn)) res.push(m);
+    }
+    return res;
+  }
+
+  // --- Rendering ---
+  const grid = document.getElementById('grid');
+  let flipped = false;
+  function renderBoard(pos, lastMove) {
+    grid.innerHTML = '';
+    const order = [...Array(64).keys()];
+    order.sort((a,b) => a-b);
+    for (const i of order) {
+      const file = i%8, rank = Math.floor(i/8);
+      const humanIdx = flipped ? (7-rank)*8 + (7-file) : i;
+      const f = humanIdx%8, r=Math.floor(humanIdx/8);
+      const sq = document.createElement('div');
+      sq.className = 'sq ' + (((f+r)%2===0)?'light':'dark');
+      sq.dataset.idx = flipped ? ( (7-r)*8 + (7-f) ) : i;
+      const piece = pos.board[i];
+      if (piece !== '.') sq.textContent = pieceChar[piece];
+      if (lastMove && (i===lastMove.from || i===lastMove.to)) sq.classList.add('lastmove');
+      grid.appendChild(sq);
+    }
+    // Coords (a1/h8) auto handled by CSS caption
+  }
+
+  // --- Interaction ---
+  let pos = startPosition();
+  let selection = null;
+  let lastLegal = [];
+  let lastMove = null;
+
+  const statusEl = document.getElementById('status');
+  const promoOverlay = document.getElementById('promo');
+  const cancelPromo = document.getElementById('cancelPromo');
+  cancelPromo.addEventListener('click', ()=> promoOverlay.style.display='none');
+
+  function updateStatus() {
+    const moves = legalMoves(pos);
+    const them = pos.turn==='w'?'Black':'White';
+    const myKing = findKing(pos, pos.turn);
+    const inCheck = squareAttacked(pos, myKing, pos.turn==='w'?'b':'w');
+    if (moves.length===0) {
+      if (inCheck) {
+        statusEl.textContent = `Checkmate. ${them} wins.`;
+      } else {
+        statusEl.textContent = `Stalemate. Draw.`;
+      }
+    } else {
+      statusEl.textContent = `${pos.turn==='w'?'White':'Black'} to move` + (inCheck?' — check!':'') + '.';
+    }
+    // King check highlight
+    [...grid.children].forEach(c=>c.classList.remove('check'));
+    if (inCheck) {
+      const k = myKing;
+      const node = [...grid.children].find(n => Number(n.dataset.idx)===k);
+      if (node) node.classList.add('check');
+    }
+    updateMoveList();
+    document.getElementById('fen').value = toFEN(pos);
+  }
+
+  function clearHighlights() {
+    [...grid.children].forEach(c => c.classList.remove('highlight','target'));
+  }
+
+  function highlightSquares(idxs, targetIdxs=[]) {
+    clearHighlights();
+    for (const n of grid.children) {
+      const idx = Number(n.dataset.idx);
+      if (idxs.includes(idx)) n.classList.add('highlight');
+      if (targetIdxs.includes(idx)) n.classList.add('target');
+    }
+  }
+
+  function updateMoveList() {
+    const ol = document.getElementById('movelist');
+    ol.innerHTML = '';
+    const rows = [];
+    for (let i=0; i<pos.history.length; i+=2) {
+      const w = pos.history[i]?.uci || '';
+      const b = pos.history[i+1]?.uci || '';
+      const li = document.createElement('li');
+      li.textContent = `${w}${b ? '   ' + b : ''}`;
+      ol.appendChild(li);
+    }
+  }
+
+  function pickPromotion(us, cb) {
+    promoOverlay.style.display='flex';
+    promoOverlay.querySelectorAll('button[data-piece]').forEach(btn => {
+      btn.onclick = () => {
+        promoOverlay.style.display='none';
+        cb(btn.dataset.piece);
+      }
+    });
+  }
+
+  function onSquareClick(e) {
+    const el = e.target.closest('.sq');
+    if (!el) return;
+    const idx = Number(el.dataset.idx);
+    const piece = pos.board[idx];
+
+    // If selecting our own piece
+    if (piece !== '.' && ((pos.turn==='w' && isUpper(piece)) || (pos.turn==='b' && !isUpper(piece)))) {
+      selection = idx;
+      const legals = legalMoves(pos).filter(m => m.from===idx);
+      lastLegal = legals;
+      highlightSquares([idx], legals.map(m => m.to));
+      return;
+    }
+
+    // If a selection exists, attempt a move
+    if (selection !== null) {
+      const candidate = lastLegal.find(m => m.to === idx);
+      if (candidate) {
+        // If promotion needed and not yet set, ask
+        const needsPromo = candidate.flags && candidate.flags.promo;
+        if (needsPromo && !candidate.flags.promoChosen) {
+          pickPromotion(pos.turn, (pce) => {
+            const mv = clone(candidate);
+            mv.flags = {...mv.flags, promo: pce, promoChosen: true};
+            applyMove(mv);
+          });
+          return;
+        }
+        applyMove(candidate);
+      } else {
+        // Deselect if clicking elsewhere
+        selection = null; lastLegal = []; clearHighlights();
+      }
+    }
+  }
+
+  function applyMove(mv) {
+    const before = pos;
+    pos = makeMove(pos, mv);
+    lastMove = {from: mv.from, to: mv.to};
+    selection = null; lastLegal = []; clearHighlights();
+    renderBoard(pos, lastMove);
+    updateStatus();
+  }
+
+  grid.addEventListener('click', onSquareClick);
+
+  // Buttons
+  document.getElementById('new').addEventListener('click', () => {
+    pos = startPosition(); lastMove=null; selection=null; lastLegal=[];
+    renderBoard(pos,null); updateStatus();
+  });
+  document.getElementById('flip').addEventListener('click', () => {
+    flipped = !flipped; renderBoard(pos,lastMove);
+  });
+  document.getElementById('undo').addEventListener('click', () => {
+    if (!pos.history.length) return;
+    const last = pos.history.pop();
+    pos.future.push(last);
+    pos = parseFEN(last.fenBefore);
+    renderBoard(pos,null); updateStatus();
+  });
+  document.getElementById('redo').addEventListener('click', () => {
+    if (!pos.future.length) return;
+    const step = pos.future.pop();
+    const mv = step.move;
+    pos = makeMove(parseFEN(step.fenBefore), mv);
+    renderBoard(pos,{from: mv.from, to: mv.to}); updateStatus();
+  });
+  document.getElementById('loadFen').addEventListener('click', () => {
+    const fen = document.getElementById('fen').value.trim();
+    try {
+      pos = parseFEN(fen); lastMove=null; selection=null; lastLegal=[];
+      renderBoard(pos,null); updateStatus();
+    } catch(e) { alert('Invalid FEN'); }
+  });
+  document.getElementById('copyFen').addEventListener('click', async () => {
+    const fen = toFEN(pos);
+    try { await navigator.clipboard.writeText(fen); statusEl.textContent = 'FEN copied.'; setTimeout(updateStatus, 900); }
+    catch { prompt('Copy FEN:', fen); }
+  });
+
+  // Random "AI" (for demos)
+  document.getElementById('random').addEventListener('click', () => {
+    const moves = legalMoves(pos);
+    if (!moves.length) return;
+    const mv = moves[Math.floor(Math.random()*moves.length)];
+    // Handle promotion if needed
+    if (mv.flags && mv.flags.promo && !mv.flags.promoChosen) {
+      mv.flags.promo = 'q';
+      mv.flags.promoChosen = true;
+    }
+    applyMove(mv);
+  });
+
+  // Initial render
+  renderBoard(pos,null); updateStatus();
+
+})();
+</script>
+</body>
+</html>
