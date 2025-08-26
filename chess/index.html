@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess WodiGame</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♟️</text></svg>">
+</head>
+<body>
+
+    <header class="app-header">
+        <h1 class="app-title">Chess WodiGame</h1>
+        <div class="header-controls">
+            <button id="newGameBtn" aria-label="New Game">New Game</button>
+            <div class="control-group">
+                <label for="playerColorSelect">Play as:</label>
+                <select id="playerColorSelect">
+                    <option value="white">White</option>
+                    <option value="black">Black</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="aiDifficultySelect">AI:</label>
+                <select id="aiDifficultySelect">
+                    <option value="0">Off</option>
+                    <option value="1">Easy</option>
+                    <option value="2">Medium</option>
+                    <option value="3">Hard</option>
+                    <option value="4">Expert</option>
+                    <option value="5">Master</option>
+                </select>
+            </div>
+            <button id="flipBoardBtn" aria-label="Flip Board">Flip Board</button>
+            <button id="undoBtn" aria-label="Undo Last Move" disabled>Undo</button>
+            <button id="redoBtn" aria-label="Redo Move" disabled>Redo</button>
+        </div>
+    </header>
+
+    <main class="app-container">
+        <div class="game-wrapper">
+            <aside class="captured-pieces captured-white" aria-label="Captured Black Pieces"></aside>
+            <div class="board-container">
+                <div id="chessboard" class="chessboard" role="grid" aria-label="Chessboard"></div>
+            </div>
+            <aside class="captured-pieces captured-black" aria-label="Captured White Pieces"></aside>
+        </div>
+
+        <section class="game-info-panel">
+            <div id="turnInfo" class="turn-info" aria-live="polite">White's Turn</div>
+            <div class="game-status-info" id="gameStatusInfo" aria-live="polite"></div>
+            <div class="move-list-container">
+                <h2 class="panel-heading">Moves</h2>
+                <ol id="moveList" class="move-list" role="list"></ol>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <div class="footer-controls">
+            <button id="hintBtn" aria-label="Hint">Hint</button>
+            <button id="themeToggleBtn" aria-label="Toggle Dark/Light Theme">Theme</button>
+            <button id="soundsToggleBtn" aria-label="Toggle Sound">Sound</button>
+            <button id="pieceStyleToggleBtn" aria-label="Toggle Piece Style">Piece Style</button>
+            <button id="exportPgnBtn" aria-label="Export PGN">Export PGN</button>
+            <button id="importPgnBtn" aria-label="Import PGN">Import PGN</button>
+            <button id="fenLoadBtn" aria-label="Load FEN">Load FEN</button>
+        </div>
+    </footer>
+
+    <div id="promotionModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="promotionTitle" hidden>
+        <div class="modal-content">
+            <h3 id="promotionTitle">Promote to:</h3>
+            <div class="promotion-options" role="radiogroup" aria-labelledby="promotionTitle">
+                <button class="promotion-piece" data-piece="Q" aria-label="Promote to Queen"></button>
+                <button class="promotion-piece" data-piece="R" aria-label="Promote to Rook"></button>
+                <button class="promotion-piece" data-piece="B" aria-label="Promote to Bishop"></button>
+                <button class="promotion-piece" data-piece="N" aria-label="Promote to Knight"></button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="textInputModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="textInputTitle" hidden>
+        <div class="modal-content">
+            <h3 id="textInputTitle"></h3>
+            <textarea id="textInputField" rows="5"></textarea>
+            <div class="modal-buttons">
+                <button id="textInputSubmitBtn">Submit</button>
+                <button id="textInputCancelBtn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="chess.js"></script>
+    <script type="module" src="ai.js"></script>
+</body>
+</html>
