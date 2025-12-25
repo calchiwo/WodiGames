@@ -7,7 +7,7 @@ pygame.init()
 # Full-screen setup
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
-pygame.display.set_caption("Day 41 - Shooting Game 🚀")
+pygame.display.set_caption("Day 42 - Shooting Game 🎮🔥")
 clock = pygame.time.Clock()
 
 # Colors
@@ -16,10 +16,8 @@ BLACK = (0, 0, 0)
 GREEN = (0, 200, 0)
 DARK_GREEN = (0, 150, 0)
 RED = (255, 0, 0)
-YELLOW = (255, 255, 0)
-ORANGE = (255, 165, 0)
 BLUE = (0, 0, 255)
-PURPLE = (150, 0, 150)
+ORANGE = (255, 165, 0)
 
 # Fonts
 font = pygame.font.SysFont(None, 40)
@@ -31,23 +29,25 @@ GAME_TOP = 80
 GAME_BOTTOM = HEIGHT // 2 - 60
 GAME_HEIGHT = GAME_BOTTOM - GAME_TOP
 
+# Load & scale images
+player_img = pygame.image.load("player.png")
+player_img = pygame.transform.scale(player_img, (GRID_SIZE, GRID_SIZE))
+
+enemy_img = pygame.image.load("enemy.png")
+enemy_img = pygame.transform.scale(enemy_img, (GRID_SIZE, GRID_SIZE))
+
 # Player setup
 class Player:
     def __init__(self, x, y):
         self.rect = pygame.Rect(x, y, GRID_SIZE, GRID_SIZE)
-        self.color = GREEN
         self.speed = GRID_SIZE
-        self.bump_timer = 0
 
     def move(self, dx, dy):
         self.rect.x += dx * GRID_SIZE
         self.rect.y += dy * GRID_SIZE
 
     def draw(self, surface):
-        color = YELLOW if self.bump_timer > 0 else self.color
-        pygame.draw.rect(surface, color, self.rect)
-        if self.bump_timer > 0:
-            self.bump_timer -= 1
+        surface.blit(player_img, self.rect)
 
 player = Player(WIDTH // 2, GAME_TOP + GAME_HEIGHT // 2)
 
@@ -64,7 +64,7 @@ class Enemy:
         elif side == 'left':
             self.rect = pygame.Rect(0, random.randint(GAME_TOP, GAME_BOTTOM - GRID_SIZE), GRID_SIZE, GRID_SIZE)
             self.vx, self.vy = random.randint(1,2), 0
-        else:  # right
+        else:
             self.rect = pygame.Rect(WIDTH - GRID_SIZE, random.randint(GAME_TOP, GAME_BOTTOM - GRID_SIZE), GRID_SIZE, GRID_SIZE)
             self.vx, self.vy = -random.randint(1,2), 0
 
@@ -73,11 +73,11 @@ class Enemy:
         self.rect.y += self.vy
 
     def draw(self, surface):
-        pygame.draw.rect(surface, RED, self.rect)
+        surface.blit(enemy_img, self.rect)
 
 enemies = []
 SPAWN_EVENT = pygame.USEREVENT + 1
-pygame.time.set_timer(SPAWN_EVENT, 1000)  # spawn an enemy every second
+pygame.time.set_timer(SPAWN_EVENT, 1000)
 
 # Bullet setup
 class Bullet:
@@ -93,10 +93,10 @@ class Bullet:
 
 bullets = []
 
-# On-screen buttons
+# Buttons
 button_size = 90
-button_spacing = 25
 button_y_center = HEIGHT // 2 + 80
+button_spacing = 25
 
 left_button = pygame.Rect(WIDTH//2 - button_size*2 - button_spacing, button_y_center, button_size, button_size)
 right_button = pygame.Rect(WIDTH//2 + button_size + button_spacing, button_y_center, button_size, button_size)
@@ -110,11 +110,7 @@ game_over = False
 
 def draw_text(text, font, color, x, y, center=True):
     label = font.render(text, True, color)
-    rect = label.get_rect()
-    if center:
-        rect.center = (x, y)
-    else:
-        rect.topleft = (x, y)
+    rect = label.get_rect(center=(x,y)) if center else label.get_rect(topleft=(x,y))
     screen.blit(label, rect)
 
 def reset_game():
@@ -130,11 +126,9 @@ running = True
 while running:
     screen.fill(WHITE)
 
-    # Event handling
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+            pygame.quit(); sys.exit()
         if event.type == SPAWN_EVENT and not game_over:
             enemies.append(Enemy())
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -148,70 +142,53 @@ while running:
                 if shoot:
                     bullets.append(Bullet(player.rect.centerx-5, player.rect.top))
             else:
-                restart_btn = pygame.Rect(WIDTH//2 - 100, GAME_TOP + GAME_HEIGHT//2 + 60, 200, 60)
-                if restart_btn.collidepoint(pos):
+                restart = pygame.Rect(WIDTH//2 - 100, GAME_TOP + GAME_HEIGHT//2 + 60, 200, 60)
+                if restart.collidepoint(pos):
                     reset_game()
+
         if event.type == pygame.MOUSEBUTTONUP:
             move_left = move_right = move_up = move_down = shoot = False
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                pygame.quit()
-                sys.exit()
+                pygame.quit(); sys.exit()
 
-    # Update player
     if not game_over:
         dx = dy = 0
         if move_left: dx = -1
         if move_right: dx = 1
         if move_up: dy = -1
         if move_down: dy = 1
-        if dx != 0 or dy != 0:
-            player.move(dx, dy)
+        if dx or dy: player.move(dx, dy)
 
-        # Boundary collision
         if (player.rect.left < 0 or player.rect.right > WIDTH or
             player.rect.top < GAME_TOP or player.rect.bottom > GAME_BOTTOM):
             game_over = True
 
-        # Update bullets
-        for b in bullets[:]:
-            b.update()
-            if b.rect.bottom < GAME_TOP:
-                bullets.remove(b)
+        for bullet in bullets[:]:
+            bullet.update()
+            if bullet.rect.bottom < GAME_TOP:
+                bullets.remove(bullet)
 
-        # Update enemies
-        for e in enemies[:]:
-            e.update()
-            # Collision with player
-            if player.rect.colliderect(e.rect):
-                player.bump_timer = 5
+        for enemy in enemies[:]:
+            enemy.update()
+            if player.rect.colliderect(enemy.rect):
                 game_over = True
-            # Collision with bullets
-            for b in bullets[:]:
-                if e.rect.colliderect(b.rect):
-                    enemies.remove(e)
-                    bullets.remove(b)
+            for bullet in bullets[:]:
+                if enemy.rect.colliderect(bullet.rect):
+                    enemies.remove(enemy)
+                    bullets.remove(bullet)
                     score += 1
                     break
 
-    # Draw gameplay area
-    pygame.draw.rect(screen, (200, 200, 255), (0, GAME_TOP, WIDTH, GAME_HEIGHT), 4)
+    pygame.draw.rect(screen, (200,200,255), (0, GAME_TOP, WIDTH, GAME_HEIGHT), 4)
 
-    # Draw enemies
-    for e in enemies:
-        e.draw(screen)
-
-    # Draw bullets
-    for b in bullets:
-        b.draw(screen)
-
-    # Draw player
+    for e in enemies: e.draw(screen)
+    for b in bullets: b.draw(screen)
     player.draw(screen)
 
-    # Draw score
     draw_text(f"Score: {score}", font, ORANGE, 10, 10, center=False)
 
-    # Draw on-screen buttons
     for btn, label in [
         (left_button, "←"), (right_button, "→"),
         (up_button, "↑"), (down_button, "↓"),
@@ -219,20 +196,13 @@ while running:
     ]:
         pygame.draw.rect(screen, DARK_GREEN, btn, border_radius=12)
         draw_text(label, font, WHITE, btn.centerx, btn.centery)
-        if ((btn == left_button and move_left) or
-            (btn == right_button and move_right) or
-            (btn == up_button and move_up) or
-            (btn == down_button and move_down) or
-            (btn == shoot_button and shoot)):
-            pygame.draw.rect(screen, GREEN, btn.inflate(15, 15), border_radius=12, width=3)
 
-    # Game over screen
     if game_over:
         draw_text("GAME OVER", big_font, RED, WIDTH//2, GAME_TOP + GAME_HEIGHT//2 - 30)
         draw_text(f"Final Score: {score}", font, BLACK, WIDTH//2, GAME_TOP + GAME_HEIGHT//2 + 10)
-        restart_btn = pygame.Rect(WIDTH//2 - 100, GAME_TOP + GAME_HEIGHT//2 + 60, 200, 60)
-        pygame.draw.rect(screen, GREEN, restart_btn, border_radius=10)
-        draw_text("Restart", font, WHITE, restart_btn.centerx, restart_btn.centery)
+        restart = pygame.Rect(WIDTH//2 - 100, GAME_TOP + GAME_HEIGHT//2 + 60, 200, 60)
+        pygame.draw.rect(screen, GREEN, restart, border_radius=10)
+        draw_text("Restart", font, WHITE, restart.centerx, restart.centery)
 
     pygame.display.flip()
     clock.tick(30)
