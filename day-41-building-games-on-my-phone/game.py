@@ -7,7 +7,7 @@ pygame.init()
 # Full-screen setup
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WIDTH, HEIGHT = screen.get_size()
-pygame.display.set_caption("Day 41 - Shooting Game 🚀")
+pygame.display.set_caption("Day 41 - Shooting Game")
 clock = pygame.time.Clock()
 
 # Colors
@@ -236,3 +236,4 @@ while running:
 
     pygame.display.flip()
     clock.tick(30)
+
